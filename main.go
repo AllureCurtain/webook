@@ -3,7 +3,7 @@ package main
 import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/sessions"
-	"github.com/gin-contrib/sessions/cookie"
+	"github.com/gin-contrib/sessions/redis"
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -56,7 +56,16 @@ func initWebServer() *gin.Engine {
 	}))
 
 	// session
-	store := cookie.NewStore([]byte("secret"))
+	//store := cookie.NewStore([]byte("secret"))
+
+	store, err := redis.NewStore(16, "tcp", "localhost:6379", "", "",
+		[]byte("moyn8y9abnd7q4zkq2m73yw8tu9j5ixm"),
+		[]byte("o6jdlo2cb9f9pb6h46fjmllw481ldebj"))
+
+	if err != nil {
+		panic(err)
+	}
+
 	server.Use(sessions.Sessions("webook", store))
 
 	// 校验是否登录
