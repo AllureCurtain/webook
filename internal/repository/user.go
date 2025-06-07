@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"webook/internal/domain"
+	"webook/internal/repository/cache"
 	"webook/internal/repository/dao"
 )
 
@@ -12,12 +13,14 @@ var (
 )
 
 type UserRepository struct {
-	dao *dao.UserDAO
+	dao   *dao.UserDAO
+	cache *cache.UserCache
 }
 
-func NewUserRepository(dao *dao.UserDAO) *UserRepository {
+func NewUserRepository(dao *dao.UserDAO, cache *cache.UserCache) *UserRepository {
 	return &UserRepository{
-		dao: dao,
+		dao:   dao,
+		cache: cache,
 	}
 }
 
@@ -43,11 +46,39 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (domain.
 	}, nil
 }
 
-func (r *UserRepository) FindById(id int64) {
+func (r *UserRepository) FindById(ctx context.Context, id int64) (domain.User, error) {
 	// 先从 cache 里面找
+	u, err := r.cache.Get(ctx, id)
+	if err == nil {
+		// 必然是有数据
+		return u, nil
+	}
+	// 没这个数据
+	//if err == cache.ErrKeyNotExist {
+	//	去数据库里面加载
+	//}
 
 	// 再从 dao 里面找
+	ue, err := r.dao.FindById(ctx, id)
+	if err != nil {
+		return domain.User{}, err
+	}
 
-	// 找到了回写 cache
+	u = domain.User{
+		Id:       ue.Id,
+		Email:    ue.Email,
+		Password: ue.Password,
+	}
+
+	//go func() {
+	//	err = r.cache.Set(ctx, u)
+	//	if err != nil {
+	//		// 打日志，做监控
+	//	}
+	//}()
+
+	// 忽略掉这里的错误
+	_ = r.cache.Set(ctx, u)
+	return u, nil
 
 }

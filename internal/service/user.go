@@ -2,8 +2,12 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
+	"time"
 	"webook/internal/domain"
 	"webook/internal/repository"
 )
@@ -46,4 +50,9 @@ func (svc *UserService) Login(ctx context.Context, email string, password string
 		return domain.User{}, ErrInvalidUserOrPassword
 	}
 	return u, nil
+}
+
+func (svc *UserService) Profile(ctx context.Context, id int64) (domain.User, error) {
+	u, err := svc.repo.FindById(ctx, id)
+
 }
