@@ -1,10 +1,13 @@
 package web
 
 import (
+	"fmt"
 	regexp "github.com/dlclark/regexp2"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
+	jwt "github.com/golang-jwt/jwt/v5"
 	"net/http"
+	"time"
 	"webook/internal/domain"
 	"webook/internal/service"
 )
@@ -35,7 +38,8 @@ func NewUserHandler(svc *service.UserService) *UserHandler {
 func (u *UserHandler) RegisterRoutesV1(ug *gin.RouterGroup) {
 	ug.GET("/profile", u.Profile)
 	ug.POST("/signup", u.SignUp)
-	ug.POST("/login", u.Login)
+	//ug.POST("/login", u.Login)
+	ug.POST("/login", u.LoginJWT)
 	ug.POST("/edit", u.Edit)
 }
 
@@ -103,6 +107,51 @@ func (u *UserHandler) SignUp(ctx *gin.Context) {
 	ctx.String(http.StatusOK, "注册成功")
 }
 
+func (u *UserHandler) LoginJWT(ctx *gin.Context) {
+	type LoginReq struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	var req LoginReq
+	if err := ctx.Bind(&req); err != nil {
+		return
+	}
+
+	user, err := u.svc.Login(ctx, req.Email, req.Password)
+	if err == service.ErrInvalidUserOrPassword {
+		ctx.String(http.StatusOK, "用户名或密码不对")
+		return
+	}
+
+	if err != nil {
+		ctx.String(http.StatusOK, "系统错误")
+		return
+	}
+
+	// 使用 JWT
+
+	claims := UserClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		},
+		Uid:       user.Id,
+		UserAgent: ctx.Request.UserAgent(),
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS512, claims)
+	tokenStr, err := token.SignedString([]byte("moyn8y9abnd7q4zkq2m73yw8tu9j5ixm"))
+	if err != nil {
+		ctx.String(http.StatusOK, "系统错误")
+		return
+	}
+	ctx.Header("x-jwt-token", tokenStr)
+	fmt.Println(user)
+
+	ctx.String(http.StatusOK, "登录成功")
+	return
+}
+
 func (u *UserHandler) Login(ctx *gin.Context) {
 	type LoginReq struct {
 		Email    string `json:"email"`
@@ -156,4 +205,27 @@ func (u *UserHandler) Edit(ctx *gin.Context) {
 }
 
 func (u *UserHandler) Profile(ctx *gin.Context) {
+	c, ok := ctx.Get("claims")
+	if !ok {
+		ctx.String(http.StatusOK, "“系统错误")
+		return
+	}
+
+	// ok 代表是不是 *UserClaims
+	claims, ok := c.(*UserClaims)
+	if !ok {
+		ctx.String(http.StatusOK, "系统错误")
+		return
+	}
+
+	fmt.Println(claims)
+
+	// TODO 完成 profile 其余代码
+}
+
+type UserClaims struct {
+	jwt.RegisteredClaims
+	// 声明自己的要放到 token 里面的数据
+	Uid       int64
+	UserAgent string
 }

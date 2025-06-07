@@ -3,8 +3,9 @@ package main
 import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/sessions"
-	"github.com/gin-contrib/sessions/redis"
+	"github.com/gin-contrib/sessions/memstore"
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"webook/internal/service"
 	"webook/internal/web"
 	"webook/internal/web/middleware"
+	"webook/pkg/ginx/ratelimit"
 )
 
 func main() {
@@ -23,6 +25,10 @@ func main() {
 	u := initUser(db)
 	u.RegisterRoutes(server)
 
+	//server := gin.Default()
+	//server.GET("/hello", func(ctx *gin.Context) {
+	//	ctx.String(http.StatusOK, "你好")
+	//})
 	server.Run(":8080")
 }
 
@@ -37,6 +43,12 @@ func initWebServer() *gin.Engine {
 		println("这是第二个 middleware")
 	})
 
+	redisClient := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+	})
+
+	server.Use(ratelimit.NewBuilder(redisClient, time.Second, 100).Build())
+
 	// 跨域
 	server.Use(cors.New(cors.Config{
 		//AllowOrigins: []string{"http://localhost:3000"},
@@ -44,6 +56,8 @@ func initWebServer() *gin.Engine {
 		AllowHeaders: []string{"Content-Type", "Authorization"},
 		// 是否允许携带 cookie 之类的东西
 		AllowCredentials: true,
+		// 不加这个，前端拿不到
+		ExposeHeaders: []string{"x-jwt-token"},
 		AllowOriginFunc: func(origin string) bool {
 			//return origin == "https://github.com"
 			if strings.HasPrefix(origin, "http://localhost") {
@@ -58,18 +72,23 @@ func initWebServer() *gin.Engine {
 	// session
 	//store := cookie.NewStore([]byte("secret"))
 
-	store, err := redis.NewStore(16, "tcp", "localhost:6379", "", "",
-		[]byte("moyn8y9abnd7q4zkq2m73yw8tu9j5ixm"),
-		[]byte("o6jdlo2cb9f9pb6h46fjmllw481ldebj"))
+	store := memstore.NewStore([]byte("moyn8y9abnd7q4zkq2m73yw8tu9j5ixm"), []byte("o6jdlo2cb9f9pb6h46fjmllw481ldebj"))
 
-	if err != nil {
-		panic(err)
-	}
+	//store, err := redis.NewStore(16, "tcp", "localhost:6379", "", "",
+	//	[]byte("moyn8y9abnd7q4zkq2m73yw8tu9j5ixm"),
+	//	[]byte("o6jdlo2cb9f9pb6h46fjmllw481ldebj"))
+
+	//if err != nil {
+	//	panic(err)
+	//}
 
 	server.Use(sessions.Sessions("webook", store))
 
 	// 校验是否登录
-	server.Use(middleware.NewLoginMiddleWareBuilder().
+	//server.Use(middleware.NewLoginMiddleWareBuilder().
+	//	IgnorePaths("/users/signup").
+	//	IgnorePaths("/users/login").Build())
+	server.Use(middleware.NewLoginJWTMiddleWareBuilder().
 		IgnorePaths("/users/signup").
 		IgnorePaths("/users/login").Build())
 
