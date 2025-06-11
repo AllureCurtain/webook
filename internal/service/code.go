@@ -16,12 +16,27 @@ var (
 	ErrCodeSendTooMany        = cache.ErrCodeSendTooMany
 )
 
-type CodeService struct {
-	repo   *repository.CodeRepository
+type CodeService interface {
+	Send(ctx context.Context,
+		// 区别使用业务
+		biz string,
+		phone string) error
+	Verify(ctx context.Context, biz string, phone string, inputCode string) (bool, error)
+}
+
+type codeService struct {
+	repo   repository.CodeRepository
 	smsSvc sms.Service
 }
 
-func (svc *CodeService) Send(ctx context.Context,
+func NewCodeService(repo repository.CodeRepository, smsSvc sms.Service) CodeService {
+	return &codeService{
+		repo:   repo,
+		smsSvc: smsSvc,
+	}
+}
+
+func (svc *codeService) Send(ctx context.Context,
 	// 区别使用业务
 	biz string,
 	phone string) error {
@@ -38,11 +53,11 @@ func (svc *CodeService) Send(ctx context.Context,
 	return err
 }
 
-func (svc *CodeService) Verify(ctx context.Context, biz string, phone string, inputCode string) (bool, error) {
+func (svc *codeService) Verify(ctx context.Context, biz string, phone string, inputCode string) (bool, error) {
 	return svc.repo.Verify(ctx, biz, phone, inputCode)
 }
 
-func (svc *CodeService) generateCode() string {
+func (svc *codeService) generateCode() string {
 	num := rand.Intn(1000000)
 	return fmt.Sprintf("%06d", num)
 }
