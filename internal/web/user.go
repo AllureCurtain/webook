@@ -12,7 +12,13 @@ import (
 	"webook/internal/service"
 )
 
-const biz = "login"
+const (
+	emailRegexPattern = "^\\w+([-+.]\\w+)*@\\w+([-.]\\w+)*\\.\\w+([-.]\\w+)*$"
+	// 和上面比起来，用 ` 看起来就比较清爽
+	passwordRegexPattern = `^(?=.*[A-Za-z])(?=.*\d)(?=.*[$@$!%*#?&])[A-Za-z\d$@$!%*#?&]{8,}$`
+	userIdKey            = "userId"
+	bizLogin             = "login"
+)
 
 // UserHandler 定义跟用户有关的路由
 type UserHandler struct {
@@ -23,11 +29,6 @@ type UserHandler struct {
 }
 
 func NewUserHandler(svc service.UserService, codeSvc service.CodeService) *UserHandler {
-	const (
-		emailRegexPattern = "^\\w+([-+.]\\w+)*@\\w+([-.]\\w+)*\\.\\w+([-.]\\w+)*$"
-		// 和上面比起来，用 ` 看起来就比较清爽
-		passwordRegexPattern = `^(?=.*[A-Za-z])(?=.*\d)(?=.*[$@$!%*#?&])[A-Za-z\d$@$!%*#?&]{8,}$`
-	)
 
 	emailExp := regexp.MustCompile(emailRegexPattern, regexp.None)
 	passwordExp := regexp.MustCompile(passwordRegexPattern, regexp.None)
@@ -67,7 +68,7 @@ func (u *UserHandler) LoginSMS(ctx *gin.Context) {
 		return
 	}
 	// 这里，可以加校验
-	ok, err := u.codeSvc.Verify(ctx, biz, req.Phone, req.Code)
+	ok, err := u.codeSvc.Verify(ctx, bizLogin, req.Phone, req.Code)
 	if err != nil {
 		ctx.JSON(http.StatusOK, Result{
 			Code: 5,
@@ -122,7 +123,7 @@ func (u *UserHandler) SendLoginSMSCode(ctx *gin.Context) {
 		})
 		return
 	}
-	err := u.codeSvc.Send(ctx, biz, req.Phone)
+	err := u.codeSvc.Send(ctx, bizLogin, req.Phone)
 	switch err {
 	case nil:
 		ctx.JSON(http.StatusOK, Result{Msg: "发送成功"})
@@ -240,7 +241,7 @@ func (u *UserHandler) setJWTToken(ctx *gin.Context, uid int64) error {
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
 		},
-		Uid:       uid,
+		Id:        uid,
 		UserAgent: ctx.Request.UserAgent(),
 	}
 
@@ -302,31 +303,100 @@ func (u *UserHandler) Logout(ctx *gin.Context) {
 	ctx.String(http.StatusOK, "退出登录成功")
 }
 
-func (u *UserHandler) Edit(ctx *gin.Context) {
-}
-
-func (u *UserHandler) Profile(ctx *gin.Context) {
-	c, ok := ctx.Get("claims")
-	if !ok {
-		ctx.String(http.StatusOK, "“系统错误")
-		return
+func (c *UserHandler) Edit(ctx *gin.Context) {
+	type Req struct {
+		// 注意，其它字段，尤其是密码、邮箱和手机，
+		// 修改都要通过别的手段
+		// 邮箱和手机都要验证
+		// 密码更加不用多说了
+		Nickname string `json:"nickname"`
+		// 2023-01-01
+		Birthday string `json:"birthday"`
+		AboutMe  string `json:"aboutMe"`
 	}
 
-	// ok 代表是不是 *UserClaims
-	claims, ok := c.(*UserClaims)
-	if !ok {
+	var req Req
+	if err := ctx.Bind(&req); err != nil {
 		ctx.String(http.StatusOK, "系统错误")
 		return
 	}
 
-	fmt.Println(claims)
+	// 你可以尝试在这里校验。
+	// 比如说你可以要求 Nickname 必须不为空
+	// 校验规则取决于产品经理
+	if req.Nickname == "" {
+		ctx.JSON(http.StatusOK, Result{Code: 4, Msg: "昵称不能为空"})
+		return
+	}
 
-	// TODO 完成 profile 其余代码
+	if len(req.AboutMe) > 1024 {
+		ctx.JSON(http.StatusOK, Result{Code: 4, Msg: "关于我过长"})
+		return
+	}
+	birthday, err := time.Parse(time.DateOnly, req.Birthday)
+	if err != nil {
+		// 也就是说，我们其实并没有直接校验具体的格式
+		// 而是如果你能转化过来，那就说明没问题
+		ctx.JSON(http.StatusOK, Result{Code: 4, Msg: "日期格式不对"})
+		return
+	}
+
+	uc := ctx.MustGet("user").(UserClaims)
+	err = c.svc.UpdateNonSensitiveInfo(ctx, domain.User{
+		Id:       uc.Id,
+		Nickname: req.Nickname,
+		Birthday: birthday,
+		AboutMe:  req.AboutMe,
+	})
+	if err != nil {
+		ctx.String(http.StatusOK, "系统错误")
+		return
+	}
+	ctx.JSON(http.StatusOK, Result{Msg: "OK"})
+}
+
+func (c *UserHandler) ProfileJWT(ctx *gin.Context) {
+	type Profile struct {
+		Email    string
+		Phone    string
+		Nickname string
+		Birthday string
+		AboutMe  string
+	}
+	uc := ctx.MustGet("user").(UserClaims)
+	u, err := c.svc.Profile(ctx, uc.Id)
+	if err != nil {
+		ctx.String(http.StatusOK, "系统错误")
+		return
+	}
+	ctx.JSON(http.StatusOK, Profile{
+		Email:    u.Email,
+		Phone:    u.Phone,
+		Nickname: u.Nickname,
+		Birthday: u.Birthday.Format(time.DateOnly),
+		AboutMe:  u.AboutMe,
+	})
+}
+
+func (c *UserHandler) Profile(ctx *gin.Context) {
+	type Profile struct {
+		Email string
+	}
+	sess := sessions.Default(ctx)
+	id := sess.Get(userIdKey).(int64)
+	u, err := c.svc.Profile(ctx, id)
+	if err != nil {
+		ctx.String(http.StatusOK, "系统错误")
+		return
+	}
+	ctx.JSON(http.StatusOK, Profile{
+		Email: u.Email,
+	})
 }
 
 type UserClaims struct {
 	jwt.RegisteredClaims
 	// 声明自己的要放到 token 里面的数据
-	Uid       int64
+	Id        int64
 	UserAgent string
 }

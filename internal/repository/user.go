@@ -16,6 +16,8 @@ var (
 
 type UserRepository interface {
 	Create(ctx context.Context, u domain.User) error
+	// Update 更新数据，只有非 0 值才会更新
+	Update(ctx context.Context, u domain.User) error
 	FindByEmail(ctx context.Context, email string) (domain.User, error)
 	FindByPhone(ctx context.Context, phone string) (domain.User, error)
 	FindById(ctx context.Context, id int64) (domain.User, error)
@@ -35,6 +37,14 @@ func NewUserRepository(dao dao.UserDAO, cache cache.UserCache) UserRepository {
 
 func (r *CachedUserRepository) Create(ctx context.Context, u domain.User) error {
 	return r.dao.Insert(ctx, r.domainToEntity(u))
+}
+
+func (ur *CachedUserRepository) Update(ctx context.Context, u domain.User) error {
+	err := ur.dao.UpdateNonZeroFields(ctx, ur.domainToEntity(u))
+	if err != nil {
+		return err
+	}
+	return ur.cache.Delete(ctx, u.Id)
 }
 
 func (r *CachedUserRepository) FindByEmail(ctx context.Context, email string) (domain.User, error) {
