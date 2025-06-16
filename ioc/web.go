@@ -8,7 +8,7 @@ import (
 	"time"
 	"webook/internal/web"
 	"webook/internal/web/middleware"
-	"webook/pkg/ginx/ratelimit"
+	"webook/pkg/ginx/middlewares/ratelimit"
 )
 
 func InitGin(mdls []gin.HandlerFunc, hdl *web.UserHandler) *gin.Engine {
