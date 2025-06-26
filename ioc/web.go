@@ -7,24 +7,28 @@ import (
 	"strings"
 	"time"
 	"webook/internal/web"
+	ijwt "webook/internal/web/jwt"
 	"webook/internal/web/middleware"
 	"webook/pkg/ginx/middlewares/ratelimit"
 )
 
-func InitGin(mdls []gin.HandlerFunc, hdl *web.UserHandler) *gin.Engine {
+func InitWebServer(mdls []gin.HandlerFunc, userHdl *web.UserHandler, oauth2WechatHdl *web.OAuth2WechatHandler) *gin.Engine {
 	server := gin.Default()
 	server.Use(mdls...)
-	hdl.RegisterRoutes(server)
+	userHdl.RegisterRoutes(server)
+	oauth2WechatHdl.RegisterRoutes(server)
 	return server
 }
 
-func InitMiddlewares(redisClient redis.Cmdable) []gin.HandlerFunc {
+func InitMiddlewares(redisClient redis.Cmdable, jwtHdl ijwt.Handler) []gin.HandlerFunc {
 	return []gin.HandlerFunc{
 		corsHdl(),
-		middleware.NewLoginJWTMiddleWareBuilder().
+		middleware.NewLoginJWTMiddleWareBuilder(jwtHdl).
 			IgnorePaths("/users/signup").
+			IgnorePaths("/users/refresh_token").
 			IgnorePaths("/users/login_sms/code/send").
 			IgnorePaths("/users/login_sms").
+			IgnorePaths("/oauth2/wechat/authurl").
 			IgnorePaths("/users/login").Build(),
 		ratelimit.NewBuilder(redisClient, time.Second, 100).Build(),
 	}
@@ -38,7 +42,7 @@ func corsHdl() gin.HandlerFunc {
 		// 是否允许携带 cookie 之类的东西
 		AllowCredentials: true,
 		// 不加这个，前端拿不到
-		ExposeHeaders: []string{"x-jwt-token"},
+		ExposeHeaders: []string{"x-jwt-token", "x-refresh-token"},
 		AllowOriginFunc: func(origin string) bool {
 			//return origin == "https://github.com"
 			if strings.HasPrefix(origin, "http://localhost") {

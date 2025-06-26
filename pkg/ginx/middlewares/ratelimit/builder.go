@@ -8,21 +8,36 @@ import (
 	"log"
 	"net/http"
 	"time"
-	"webook/pkg/ratelimit"
 )
 
+//type Builder struct {
+//	prefix  string
+//	limiter ratelimit.Limiter
+//}
+
 type Builder struct {
-	prefix  string
-	limiter ratelimit.Limiter
+	prefix   string
+	cmd      redis.Cmdable
+	interval time.Duration
+	// 阈值
+	rate int
 }
 
 //go:embed slide_window.lua
 var luaScript string
 
-func NewBuilder(limiter ratelimit.Limiter) *Builder {
+//	func NewBuilder(limiter ratelimit.Limiter) *Builder {
+//		return &Builder{
+//			prefix:  "ip-limiter",
+//			limiter: limiter,
+//		}
+//	}
+func NewBuilder(cmd redis.Cmdable, interval time.Duration, rate int) *Builder {
 	return &Builder{
-		prefix:  "ip-limiter",
-		limiter: limiter,
+		cmd:      cmd,
+		prefix:   "ip-limiter",
+		interval: interval,
+		rate:     rate,
 	}
 }
 
@@ -50,7 +65,13 @@ func (b *Builder) Build() gin.HandlerFunc {
 	}
 }
 
+//func (b *Builder) limit(ctx *gin.Context) (bool, error) {
+//	key := fmt.Sprintf("%s:%s", b.prefix, ctx.ClientIP())
+//	return b.limiter.Limit(ctx, key)
+//}
+
 func (b *Builder) limit(ctx *gin.Context) (bool, error) {
 	key := fmt.Sprintf("%s:%s", b.prefix, ctx.ClientIP())
-	return b.limiter.Limit(ctx, key)
+	return b.cmd.Eval(ctx, luaScript, []string{key},
+		b.interval.Milliseconds(), b.rate, time.Now().UnixMilli()).Bool()
 }

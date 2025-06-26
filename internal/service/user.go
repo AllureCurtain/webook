@@ -15,6 +15,7 @@ type UserService interface {
 	SignUp(ctx context.Context, u domain.User) error
 	Login(ctx context.Context, email string, password string) (domain.User, error)
 	FindOrCreate(ctx context.Context, phone string) (domain.User, error)
+	FindOrCreateByWechat(ctx context.Context, wechatInfo domain.WechatInfo) (domain.User, error)
 	Profile(ctx context.Context, id int64) (domain.User, error)
 	// UpdateNonSensitiveInfo 更新非敏感数据
 	// 你可以在这里进一步补充究竟哪些数据会被更新
@@ -72,6 +73,22 @@ func (svc *userService) FindOrCreate(ctx context.Context, phone string) (domain.
 		return u, err
 	}
 	return svc.repo.FindByPhone(ctx, phone)
+}
+
+func (svc *userService) FindOrCreateByWechat(ctx context.Context, info domain.WechatInfo) (domain.User, error) {
+	u, err := svc.repo.FindByWechat(ctx, info.OpenId)
+	if err != repository.ErrUserNotFound {
+		return u, err
+	}
+	// 没有这个用户
+	u = domain.User{
+		WechatInfo: info,
+	}
+	err = svc.repo.Create(ctx, u)
+	if err != nil && err != repository.ErrUserDuplicate {
+		return u, err
+	}
+	return svc.repo.FindByWechat(ctx, info.OpenId)
 }
 
 func (svc *userService) Profile(ctx context.Context, id int64) (domain.User, error) {
