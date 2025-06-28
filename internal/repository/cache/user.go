@@ -9,7 +9,7 @@ import (
 	"webook/internal/domain"
 )
 
-var ErrKeyNotExist = redis.Nil
+//var ErrKeyNotExist = redis.Nil
 
 type UserCache interface {
 	Delete(ctx context.Context, id int64) error
