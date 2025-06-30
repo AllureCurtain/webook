@@ -2,6 +2,8 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 	"net/http"
 )
 
@@ -19,6 +21,8 @@ func main() {
 	//})
 	//server.Run(":8080")
 
+	initViperV1()
+
 	server := InitWebServer()
 
 	server.GET("/hello", func(ctx *gin.Context) {
@@ -26,6 +30,48 @@ func main() {
 	})
 
 	server.Run(":8080")
+}
+
+func initViperV1() {
+	cfile := pflag.String("config", "config/config.yaml", "指定配置文件路径")
+	pflag.Parse()
+	viper.SetConfigFile(*cfile)
+
+	err := viper.ReadInConfig()
+	if err != nil {
+		panic(err)
+	}
+}
+
+func initViperV2Watch() {
+	cfile := pflag.String("config",
+		"config/dev.yaml", "配置文件路径")
+	pflag.Parse()
+	// 直接指定文件路径
+	viper.SetConfigFile(*cfile)
+	viper.WatchConfig()
+	err := viper.ReadInConfig()
+	if err != nil {
+		panic(err)
+	}
+}
+
+func initViper() {
+	viper.SetDefault("db.src.dsn", "root:root@tcp(localhost:3306)/webook")
+
+	// 配置文件的名字，但是不包含文件扩展名
+	// 不包含 .go, .yaml 之类的后缀
+	viper.SetConfigName("dev")
+	// 告诉 viper 我的配置用的是 yaml 格式
+	viper.SetConfigType("yaml")
+	// 当前工作目录下的 config 子目录
+	viper.AddConfigPath("./config")
+
+	// 读取配置到 viper 里面
+	err := viper.ReadInConfig()
+	if err != nil {
+		panic(err)
+	}
 }
 
 //func initWebServer() *gin.Engine {
