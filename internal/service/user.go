@@ -6,6 +6,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"webook/internal/domain"
 	"webook/internal/repository"
+	"webook/pkg/logger"
 )
 
 var ErrUserDuplicateEmail = repository.ErrUserDuplicate
@@ -24,11 +25,21 @@ type UserService interface {
 
 type userService struct {
 	repo repository.UserRepository
+	l    logger.LoggerV1
 }
 
-func NewUserService(repo repository.UserRepository) UserService {
+func NewUserService(repo repository.UserRepository, l logger.LoggerV1) UserService {
 	return &userService{
 		repo: repo,
+		l:    l,
+	}
+}
+
+func NewUserServiceV1(repo repository.UserRepository, l logger.LoggerV1) UserService {
+	return &userService{
+		repo: repo,
+		// 预留了变化空间
+		//l: zap.L(),
 	}
 }
 
@@ -64,6 +75,11 @@ func (svc *userService) FindOrCreate(ctx context.Context, phone string) (domain.
 	if err != repository.ErrUserNotFound {
 		return u, err
 	}
+
+	// 在这里，把 phone 脱敏之后打出来
+	//zap.L().Info("用户未注册", zap.String("phone", phone))
+	svc.l.Info("用户未注册", logger.String("phone", phone))
+
 	// 没有这个用户
 	u = domain.User{
 		Phone: phone,

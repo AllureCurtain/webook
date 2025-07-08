@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 	"net/http"
 	"time"
 	"webook/internal/domain"
@@ -92,6 +93,8 @@ func (u *UserHandler) RefreshToken(ctx *gin.Context) {
 
 	err = u.CheckSession(ctx, rc.Ssid)
 	if err != nil {
+		// 信息量不足
+		zap.L().Error("系统异常", zap.Error(err))
 		// 要么 redis 有问题，要么已经退出登录
 		ctx.AbortWithStatus(http.StatusUnauthorized)
 		return

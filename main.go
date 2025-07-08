@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 	"net/http"
 )
 
@@ -23,6 +24,8 @@ func main() {
 
 	initViperV1()
 
+	initLogger()
+
 	server := InitWebServer()
 
 	server.GET("/hello", func(ctx *gin.Context) {
@@ -30,6 +33,15 @@ func main() {
 	})
 
 	server.Run(":8080")
+}
+
+func initLogger() {
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		panic(err)
+	}
+	zap.ReplaceGlobals(logger)
+	zap.L().Info("hello")
 }
 
 func initViperV1() {

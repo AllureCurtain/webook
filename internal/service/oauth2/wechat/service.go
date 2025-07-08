@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"webook/internal/domain"
+	"webook/pkg/logger"
 )
 
 const authURLPattern = "https://open.weixin.qq.com/connect/qrconnect?appid=%s&redirect_uri=%s&response_type=code&scope=snsapi_login&state=%s#wechat_redire"
@@ -28,6 +29,7 @@ type service struct {
 	appId     string
 	appSecret string
 	client    *http.Client
+	logger    logger.LoggerV1
 }
 
 type Result struct {
@@ -44,11 +46,12 @@ type Result struct {
 	UnionId string `json:"unionid"`
 }
 
-func NewService(appId, appSecret string) Service {
+func NewService(appId, appSecret string, logger logger.LoggerV1) Service {
 	return &service{
 		appId:     appId,
 		appSecret: appSecret,
 		client:    http.DefaultClient,
+		logger:    logger,
 	}
 }
 

@@ -1,6 +1,7 @@
 package ioc
 
 import (
+	"context"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
@@ -9,7 +10,9 @@ import (
 	"webook/internal/web"
 	ijwt "webook/internal/web/jwt"
 	"webook/internal/web/middleware"
+	logger "webook/pkg/ginx/middlewares/logger"
 	"webook/pkg/ginx/middlewares/ratelimit"
+	logger2 "webook/pkg/logger"
 )
 
 func InitWebServer(mdls []gin.HandlerFunc, userHdl *web.UserHandler, oauth2WechatHdl *web.OAuth2WechatHandler) *gin.Engine {
@@ -20,9 +23,12 @@ func InitWebServer(mdls []gin.HandlerFunc, userHdl *web.UserHandler, oauth2Wecha
 	return server
 }
 
-func InitMiddlewares(redisClient redis.Cmdable, jwtHdl ijwt.Handler) []gin.HandlerFunc {
+func InitMiddlewares(redisClient redis.Cmdable, l logger2.LoggerV1, jwtHdl ijwt.Handler) []gin.HandlerFunc {
 	return []gin.HandlerFunc{
 		corsHdl(),
+		logger.NewBuilder(func(ctx context.Context, al logger.AccessLog) {
+			l.Debug("HTTP 请求", logger2.Field{Key: "al", Value: al})
+		}).AllowReqBody().AllowRespBody().Build(),
 		middleware.NewLoginJWTMiddleWareBuilder(jwtHdl).
 			IgnorePaths("/users/signup").
 			IgnorePaths("/users/refresh_token").
