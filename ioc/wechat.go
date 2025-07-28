@@ -19,7 +19,10 @@ func InitWechatService() wechat.Service {
 	//if !ok {
 	//	panic("没有找到环境变量 WECHAT_APP_SECRET")
 	//}
-	return wechat.NewService(appId, appKey)
+
+	log := InitLogger()
+
+	return wechat.NewService(appId, appKey, log)
 }
 
 func NewWechatHandlerConfig() web.WechatHandlerConfig {

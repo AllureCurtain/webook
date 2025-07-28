@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"net/http"
+	"webook/internal/integration/startup"
 )
 
 func main() {
@@ -26,7 +27,7 @@ func main() {
 
 	initLogger()
 
-	server := InitWebServer()
+	server := startup.InitWebServer()
 
 	server.GET("/hello", func(ctx *gin.Context) {
 		ctx.String(http.StatusOK, "hello")
