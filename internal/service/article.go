@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"webook/internal/domain"
 	"webook/internal/repository"
 )
@@ -30,9 +29,5 @@ func (a *articleService) Save(ctx context.Context, art domain.Article) (int64, e
 }
 
 func (a *articleService) update(ctx context.Context, art domain.Article) error {
-	artInDB := a.repo.FindById(ctx, art.Id)
-	if art.Author.Id != artInDB.Author.Id {
-		return errors.New("更新别人的数据")
-	}
 	return a.repo.Update(ctx, art)
 }
