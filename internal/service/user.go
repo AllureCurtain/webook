@@ -123,7 +123,7 @@ func (svc *userService) UpdateNonSensitiveInfo(ctx context.Context, user domain.
 	// 写法1
 	// 这种是简单的写法，依赖与 Web 层保证没有敏感数据被修改
 	// 也就是说，你的基本假设是前端传过来的数据就是不会修改 Email，Phone 之类的信息的。
-	//return svc.repo.Update(ctx, user)
+	//return svc.repo.UpdateById(ctx, user)
 
 	// 写法2
 	// 这种是复杂写法，依赖于 repository 中更新会忽略 0 值
