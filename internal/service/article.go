@@ -50,8 +50,7 @@ func (a *articleService) update(ctx context.Context, art domain.Article) error {
 }
 
 func (a *articleService) Publish(ctx context.Context, art domain.Article) (int64, error) {
-	//TODO implement me
-	panic("implement me")
+	return a.repo.Sync(ctx, art)
 }
 
 // PublishV1 基于使用两种 repository 的写法
