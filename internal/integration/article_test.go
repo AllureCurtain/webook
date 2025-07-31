@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"webook/internal/domain"
 	"webook/internal/integration/startup"
 	"webook/internal/repository/dao/article"
 	ijwt "webook/internal/web/jwt"
@@ -73,6 +74,7 @@ func (s *ArticleTestSuite) TestEdit() {
 					Title:    "我的标题",
 					Content:  "我的内容",
 					AuthorId: 123,
+					Status:   uint8(domain.ArticleStatusUnpublished),
 				}, art)
 			},
 			art: Article{
@@ -96,6 +98,7 @@ func (s *ArticleTestSuite) TestEdit() {
 					AuthorId: 123,
 					Ctime:    123,
 					Utime:    234,
+					Status:   uint8(domain.ArticleStatusPublished),
 				}).Error
 				assert.NoError(t, err)
 			},

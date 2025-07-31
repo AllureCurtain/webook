@@ -2,15 +2,19 @@ package article
 
 import (
 	"context"
+	"errors"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"time"
 )
 
+var ErrPossibleIncorrectAuthor = errors.New("用户在尝试操作非本人数据")
+
 type ArticleDAO interface {
 	Insert(ctx context.Context, art Article) (int64, error)
 	UpdateById(ctx context.Context, article Article) error
 	Sync(ctx context.Context, art Article) (int64, error)
+	SyncStatus(ctx context.Context, author, id int64, status uint8) error
 }
 
 func NewGORMArticleDAO(db *gorm.DB) ArticleDAO {
@@ -38,6 +42,7 @@ func (dao *GORMArticleDAO) UpdateById(ctx context.Context, art Article) error {
 		Updates(map[string]any{
 			"title":   art.Title,
 			"content": art.Content,
+			"status":  art.Status,
 			"utime":   art.Utime,
 		}).Error
 	return err
@@ -79,6 +84,30 @@ func (dao *GORMArticleDAO) Sync(ctx context.Context, art Article) (int64, error)
 	}
 	tx.Commit()
 	return id, tx.Error
+}
+
+func (dao *GORMArticleDAO) SyncStatus(ctx context.Context, author, id int64, status uint8) error {
+	return dao.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		res := tx.Model(&Article{}).
+			Where("id=? AND author_id = ?", id, author).
+			Update("status", status)
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected != 1 {
+			return ErrPossibleIncorrectAuthor
+		}
+
+		res = tx.Model(&PublishedArticle{}).
+			Where("id=? AND author_id = ?", id, author).Update("status", status)
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected != 1 {
+			return ErrPossibleIncorrectAuthor
+		}
+		return nil
+	})
 }
 
 //type Article struct {

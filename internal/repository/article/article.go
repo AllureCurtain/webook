@@ -13,6 +13,8 @@ type ArticleRepository interface {
 	Update(ctx context.Context, art domain.Article) error
 	Sync(ctx context.Context, art domain.Article) (int64, error)
 	//FindById(ctx context.Context, id int64) domain.Article
+	// SyncStatus 仅仅同步状态
+	SyncStatus(ctx context.Context, uid, id int64, status domain.ArticleStatus) error
 }
 
 type CachedArticleRepository struct {
@@ -38,6 +40,7 @@ func (c *CachedArticleRepository) Create(ctx context.Context, art domain.Article
 		Title:    art.Title,
 		Content:  art.Content,
 		AuthorId: art.Author.Id,
+		Status:   art.Status.ToUint8(),
 	})
 }
 
@@ -47,6 +50,7 @@ func (c *CachedArticleRepository) Update(ctx context.Context, art domain.Article
 		Title:    art.Title,
 		Content:  art.Content,
 		AuthorId: art.Author.Id,
+		Status:   art.Status.ToUint8(),
 	})
 }
 
@@ -131,11 +135,15 @@ func (repo *CachedArticleRepository) SyncV2(ctx context.Context, art domain.Arti
 	return artn.Id, nil
 }
 
+func (repo *CachedArticleRepository) SyncStatus(ctx context.Context, uid, id int64, status domain.ArticleStatus) error {
+	return repo.dao.SyncStatus(ctx, uid, id, status.ToUint8())
+}
+
 func (repo *CachedArticleRepository) ToDomain(art dao.Article) domain.Article {
 	return domain.Article{
-		Id:    art.Id,
-		Title: art.Title,
-		//Status:  domain.ArticleStatus(art.Status),
+		Id:      art.Id,
+		Title:   art.Title,
+		Status:  domain.ArticleStatus(art.Status),
 		Content: art.Content,
 		Author: domain.Author{
 			Id: art.AuthorId,
@@ -152,6 +160,6 @@ func (repo *CachedArticleRepository) toEntity(art domain.Article) dao.Article {
 		// 这一步，就是将领域状态转化为存储状态。
 		// 这里我们就是直接转换，
 		// 有些情况下，这里可能是借助一个 map 来转
-		//Status: uint8(art.Status),
+		Status: uint8(art.Status),
 	}
 }
