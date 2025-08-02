@@ -4,6 +4,7 @@ import (
 	"github.com/ecodeclub/ekit/slice"
 	"github.com/gin-gonic/gin"
 	"net/http"
+	"strconv"
 	"time"
 	"webook/internal/domain"
 	"webook/internal/service"
@@ -33,6 +34,7 @@ func (h *ArticleHandler) RegisterRoutes(server *gin.Engine) {
 	g.POST("/publish", h.Publish)
 
 	g.POST("/list", ginx.WrapClaimsAndReq(h.List))
+	g.GET("/detail/:id", h.Detail)
 }
 
 func (h *ArticleHandler) Edit(ctx *gin.Context) {
@@ -191,6 +193,63 @@ func (a *ArticleHandler) List(ctx *gin.Context, req ListReq, uc ginx.UserClaims)
 				}
 			}),
 	}, nil
+}
+
+func (a *ArticleHandler) Detail(ctx *gin.Context) {
+	idstr := ctx.Param("id")
+	id, err := strconv.ParseInt(idstr, 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusOK, Result{
+			Code: 4,
+			Msg:  "参数错误",
+		})
+		a.l.Error("前端输入的 ID 不对", logger.Error(err))
+		return
+	}
+	usr, ok := ctx.MustGet("user").(ginx.UserClaims)
+	if !ok {
+		ctx.JSON(http.StatusOK, Result{
+			Code: 5,
+			Msg:  "系统错误",
+		})
+		a.l.Error("获得用户会话信息失败")
+		return
+	}
+	art, err := a.svc.GetById(ctx, id)
+	if err != nil {
+		ctx.JSON(http.StatusOK, Result{
+			Code: 5,
+			Msg:  "系统错误",
+		})
+		a.l.Error("获得文章信息失败", logger.Error(err))
+		return
+	}
+	//art := resp.GetArticle()
+	// 这是不借助数据库查询来判定的方法
+	if art.Author.Id != usr.Id {
+		ctx.JSON(http.StatusOK, Result{
+			Code: 4,
+			// 也不需要告诉前端究竟发生了什么
+			Msg: "输入有误",
+		})
+		// 如果公司有风控系统，这个时候就要上报这种非法访问的用户了。
+		a.l.Error("非法访问文章，创作者 ID 不匹配", logger.Int64("uid", usr.Id))
+		return
+	}
+	ctx.JSON(http.StatusOK, Result{
+		Data: ArticleVo{
+			Id:    art.Id,
+			Title: art.Title,
+			// 不需要这个摘要信息
+			//Abstract: art.Abstract(),
+			Status:  art.Status.ToUint8(),
+			Content: art.Content,
+			// 这个是创作者看自己的文章列表，也不需要这个字段
+			//Author: art.Author
+			Ctime: art.Ctime.Format(time.DateTime),
+			Utime: art.Utime.Format(time.DateTime),
+		},
+	})
 }
 
 func (req ArticleReq) toDomain(uid int64) domain.Article {

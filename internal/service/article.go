@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"golang.org/x/sync/errgroup"
+	"time"
 	"webook/internal/domain"
 	"webook/internal/repository/article"
 	"webook/pkg/logger"
@@ -13,10 +15,21 @@ type ArticleService interface {
 	Withdraw(ctx context.Context, uid, id int64) error
 	PublishV1(ctx context.Context, art domain.Article) (int64, error)
 	List(ctx context.Context, uid int64, offset int, limit int) ([]domain.Article, error)
+	GetById(ctx context.Context, id int64) (domain.Article, error)
+
+	// 剩下的这个是给读者用的服务，暂时放到这里
+
+	// GetPublishedById 查找已经发表的
+	// 正常来说在微服务架构下，读者服务和创作者服务会是两个独立的服务
+	// 单体应用下可以混在一起，毕竟现在也没几个方法
+	GetPublishedById(ctx context.Context, id, uid int64) (domain.Article, error)
+	// ListPub 根据更新时间来分页，更新时间必须小于 startTime
+	ListPub(ctx context.Context, startTime time.Time, offset, limit int) ([]domain.Article, error)
 }
 
 type articleService struct {
-	repo article.ArticleRepository
+	repo     article.ArticleRepository
+	userRepo article.AuthorRepository
 
 	// V1
 	author article.ArticleAuthorRepository
@@ -100,4 +113,51 @@ func (svc *articleService) Withdraw(ctx context.Context, uid, id int64) error {
 
 func (a *articleService) List(ctx context.Context, uid int64, offset int, limit int) ([]domain.Article, error) {
 	return a.repo.List(ctx, uid, offset, limit)
+}
+
+func (svc *articleService) GetById(ctx context.Context, id int64) (domain.Article, error) {
+	return svc.repo.GetById(ctx, id)
+}
+
+func (svc *articleService) GetPublishedById(ctx context.Context, id, uid int64) (domain.Article, error) {
+	var eg errgroup.Group
+	var art *domain.Article
+	var author *domain.Author
+	var err error
+	eg.Go(func() error {
+		res, eerr := svc.repo.GetPublishedById(ctx, id)
+		art = &res
+		return eerr
+	})
+	eg.Go(func() error {
+		res, eerr := svc.userRepo.FindAuthor(ctx, id)
+		author = &res
+		return eerr
+	})
+	if err = eg.Wait(); err != nil {
+		return domain.Article{}, err
+	}
+	art.Author = *author
+	res := *art
+	//go func() {
+	//	if err == nil {
+	//		er := svc.producer.ProduceReadEvent(events.ReadEvent{
+	//			Aid: id,
+	//			Uid: id,
+	//		})
+	//		if er != nil {
+	//			svc.logger.Error("发送消息失败",
+	//				logger.Int64("uid", uid),
+	//				logger.Int64("aid", id),
+	//				logger.Error(err))
+	//		}
+	//	}
+	//}()
+	return res, err
+}
+
+func (svc *articleService) ListPub(ctx context.Context,
+	startTime time.Time,
+	offset, limit int) ([]domain.Article, error) {
+	return svc.repo.ListPub(ctx, startTime, offset, limit)
 }

@@ -150,8 +150,7 @@ func (dao *GORMArticleDAO) SyncClosure(ctx context.Context,
 	return id, err
 }
 
-func (dao *GORMArticleDAO) Insert(ctx context.Context,
-	art Article) (int64, error) {
+func (dao *GORMArticleDAO) Insert(ctx context.Context, art Article) (int64, error) {
 	now := time.Now().UnixMilli()
 	art.Ctime = now
 	art.Utime = now
@@ -160,8 +159,7 @@ func (dao *GORMArticleDAO) Insert(ctx context.Context,
 }
 
 // UpdateById 只更新标题、内容和状态
-func (dao *GORMArticleDAO) UpdateById(ctx context.Context,
-	art Article) error {
+func (dao *GORMArticleDAO) UpdateById(ctx context.Context, art Article) error {
 	now := time.Now().UnixMilli()
 	res := dao.db.Model(&Article{}).WithContext(ctx).
 		Where("id=? AND author_id = ? ", art.Id, art.AuthorId).
