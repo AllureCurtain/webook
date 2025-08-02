@@ -11,7 +11,9 @@ import (
 	"time"
 	"webook/internal/domain"
 	"webook/internal/service"
+	"webook/internal/web/errs"
 	ijwt "webook/internal/web/jwt"
+	"webook/pkg/ginx"
 )
 
 const (
@@ -24,40 +26,39 @@ const (
 
 // UserHandler 定义跟用户有关的路由
 type UserHandler struct {
-	svc         service.UserService
-	codeSvc     service.CodeService
-	emailExp    *regexp.Regexp
-	passwordExp *regexp.Regexp
+	svc              service.UserService
+	codeSvc          service.CodeService
+	emailRegexExp    *regexp.Regexp
+	passwordRegexExp *regexp.Regexp
 	ijwt.Handler
 	cmd redis.Cmdable
 }
 
 func NewUserHandler(svc service.UserService, codeSvc service.CodeService, jwtHdl ijwt.Handler) *UserHandler {
-
-	emailExp := regexp.MustCompile(emailRegexPattern, regexp.None)
-	passwordExp := regexp.MustCompile(passwordRegexPattern, regexp.None)
 	return &UserHandler{
-		svc:         svc,
-		emailExp:    emailExp,
-		passwordExp: passwordExp,
-		codeSvc:     codeSvc,
-		Handler:     jwtHdl,
+		svc:              svc,
+		emailRegexExp:    regexp.MustCompile(emailRegexPattern, regexp.None),
+		passwordRegexExp: regexp.MustCompile(passwordRegexPattern, regexp.None),
+		codeSvc:          codeSvc,
+		Handler:          jwtHdl,
 	}
 }
 
-func (u *UserHandler) RegisterRoutesV1(ug *gin.RouterGroup) {
-	ug.GET("/profile", u.Profile)
-	ug.POST("/signup", u.SignUp)
-	//ug.POST("/login", u.Login)
-	ug.POST("/login", u.LoginJWT)
-	ug.POST("/edit", u.Edit)
-}
+//func (u *UserHandler) RegisterRoutesV1(ug *gin.RouterGroup) {
+//	ug.GET("/profile", u.Profile)
+//	ug.POST("/signup", u.SignUp)
+//	//ug.POST("/login", u.Login)
+//	ug.POST("/login", u.LoginJWT)
+//	ug.POST("/edit", u.Edit)
+//}
 
 func (u *UserHandler) RegisterRoutes(server *gin.Engine) {
 	ug := server.Group("/users")
 	ug.GET("/profile", u.Profile)
-	ug.POST("/signup", u.SignUp)
-	ug.POST("/login", u.Login)
+	//ug.POST("/signup", u.SignUp)
+	ug.POST("/signup", ginx.WrapReq[SignUpReq](u.SignUp))
+	//ug.POST("/login", u.Login)
+	ug.POST("/login", ginx.WrapReq[LoginReq](u.LoginJWT))
 	ug.POST("/logout", u.LogoutJWT)
 	ug.POST("/edit", u.Edit)
 	ug.POST("/login_sms/code/send", u.SendLoginSMSCode)
@@ -197,94 +198,175 @@ func (u *UserHandler) SendLoginSMSCode(ctx *gin.Context) {
 	})
 }
 
-func (u *UserHandler) SignUp(ctx *gin.Context) {
-	type SignUpReq struct {
-		Email           string `json:"email"`
-		ConfirmPassword string `json:"confirmPassword"`
-		Password        string `json:"password"`
-	}
+type SignUpReq struct {
+	Email           string `json:"email"`
+	Password        string `json:"password"`
+	ConfirmPassword string `json:"confirmPassword"`
+}
 
-	var req SignUpReq
-	// Bind 方法会根据 Content-Type 来解析你的数据到 req 里面
-	// 解析错了，就会直接写回一个 400 的错误
-	if err := ctx.Bind(&req); err != nil {
-		return
-	}
+func (c *UserHandler) SignUp(ctx *gin.Context, req SignUpReq) (ginx.Result, error) {
 
-	ok, err := u.emailExp.MatchString(req.Email)
+	isEmail, err := c.emailRegexExp.MatchString(req.Email)
 	if err != nil {
-		ctx.String(http.StatusOK, "系统错误")
-		return
+		return Result{
+			Code: errs.UserInternalServerError,
+			Msg:  "系统错误",
+		}, err
 	}
-	if !ok {
-		ctx.String(http.StatusOK, "你的邮箱格式不对")
-		return
+	if !isEmail {
+		return Result{
+			Code: errs.UserInvalidInput,
+			Msg:  "邮箱输入错误",
+		}, nil
 	}
 
-	if req.ConfirmPassword != req.Password {
-		ctx.String(http.StatusOK, "两次输入的密码不一致")
-		return
+	if req.Password != req.ConfirmPassword {
+		return Result{
+			Code: errs.UserInvalidInput,
+			Msg:  "两次输入密码不对",
+		}, nil
 	}
-	ok, err = u.passwordExp.MatchString(req.Password)
+
+	isPassword, err := c.passwordRegexExp.MatchString(req.Password)
 	if err != nil {
-		ctx.String(http.StatusOK, "系统错误")
-		return
+		return Result{
+			Code: errs.UserInvalidInput,
+			Msg:  "系统错误",
+		}, err
+	}
+	if !isPassword {
+		return Result{
+			Code: errs.UserInvalidInput,
+			Msg:  "密码必须包含数字、特殊字符，并且长度不能小于 8 位",
+		}, nil
 	}
 
-	if !ok {
-		ctx.String(http.StatusOK, "密码必须大于 8 位，包括数字、特殊字符")
-		return
-	}
-
-	// 调用一下 svc 的方法
-	err = u.svc.SignUp(ctx, domain.User{
+	err = c.svc.SignUp(ctx, domain.User{
 		Email:    req.Email,
 		Password: req.Password,
 	})
-	if err == service.ErrUserDuplicateEmail {
-		ctx.String(http.StatusOK, "邮箱冲突")
-		return
-	}
+	//_, err = c.svc.Signup(ctx.Request.Context(), &userv1.SignupRequest{User: &userv1.User{Email: req.Email, Password: req.ConfirmPassword}})
 	if err != nil {
-		ctx.String(http.StatusOK, "系统异常")
-		return
+		return Result{
+			Code: errs.UserInternalServerError,
+			Msg:  "系统错误",
+		}, err
 	}
-
-	ctx.String(http.StatusOK, "注册成功")
+	return Result{
+		Msg: "OK",
+	}, nil
 }
 
-func (u *UserHandler) LoginJWT(ctx *gin.Context) {
-	type LoginReq struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
-	}
+//func (u *UserHandler) SignUp(ctx *gin.Context) {
+//	type SignUpReq struct {
+//		Email           string `json:"email"`
+//		ConfirmPassword string `json:"confirmPassword"`
+//		Password        string `json:"password"`
+//	}
+//
+//	var req SignUpReq
+//	// Bind 方法会根据 Content-Type 来解析你的数据到 req 里面
+//	// 解析错了，就会直接写回一个 400 的错误
+//	if err := ctx.Bind(&req); err != nil {
+//		return
+//	}
+//
+//	ok, err := u.emailRegexExp.MatchString(req.Email)
+//	if err != nil {
+//		ctx.String(http.StatusOK, "系统错误")
+//		return
+//	}
+//	if !ok {
+//		ctx.String(http.StatusOK, "你的邮箱格式不对")
+//		return
+//	}
+//
+//	if req.ConfirmPassword != req.Password {
+//		ctx.String(http.StatusOK, "两次输入的密码不一致")
+//		return
+//	}
+//	ok, err = u.passwordRegexExp.MatchString(req.Password)
+//	if err != nil {
+//		ctx.String(http.StatusOK, "系统错误")
+//		return
+//	}
+//
+//	if !ok {
+//		ctx.String(http.StatusOK, "密码必须大于 8 位，包括数字、特殊字符")
+//		return
+//	}
+//
+//	// 调用一下 svc 的方法
+//	err = u.svc.SignUp(ctx, domain.User{
+//		Email:    req.Email,
+//		Password: req.Password,
+//	})
+//	if err == service.ErrUserDuplicateEmail {
+//		ctx.String(http.StatusOK, "邮箱冲突")
+//		return
+//	}
+//	if err != nil {
+//		ctx.String(http.StatusOK, "系统异常")
+//		return
+//	}
+//
+//	ctx.String(http.StatusOK, "注册成功")
+//}
 
-	var req LoginReq
-	if err := ctx.Bind(&req); err != nil {
-		return
-	}
+type LoginReq struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
 
-	user, err := u.svc.Login(ctx, req.Email, req.Password)
-	if err == service.ErrInvalidUserOrPassword {
-		ctx.String(http.StatusOK, "用户名或密码不对")
-		return
-	}
+func (c *UserHandler) LoginJWT(ctx *gin.Context, req LoginReq) (ginx.Result, error) {
+	//u, err := c.svc.Login(ctx.Request.Context(), &userv1.LoginRequest{
+	//	Email: req.Email, Password: req.Password,
+	//})
+	u, err := c.svc.Login(ctx, req.Email, req.Password)
 
 	if err != nil {
-		ctx.String(http.StatusOK, "系统错误")
-		return
+		return ginx.Result{}, err
 	}
-
-	// 使用 JWT
-
-	if err = u.SetLoginToken(ctx, user.Id); err != nil {
-		ctx.String(http.StatusOK, "系统错误")
-		return
+	//err = c.SetLoginToken(ctx, u.User.Id)
+	err = c.SetLoginToken(ctx, u.Id)
+	if err != nil {
+		return ginx.Result{}, err
 	}
-
-	ctx.String(http.StatusOK, "登录成功")
-	return
+	return ginx.Result{Msg: "登录成功"}, nil
 }
+
+//func (u *UserHandler) LoginJWT(ctx *gin.Context) {
+//	type LoginReq struct {
+//		Email    string `json:"email"`
+//		Password string `json:"password"`
+//	}
+//
+//	var req LoginReq
+//	if err := ctx.Bind(&req); err != nil {
+//		return
+//	}
+//
+//	user, err := u.svc.Login(ctx, req.Email, req.Password)
+//	if err == service.ErrInvalidUserOrPassword {
+//		ctx.String(http.StatusOK, "用户名或密码不对")
+//		return
+//	}
+//
+//	if err != nil {
+//		ctx.String(http.StatusOK, "系统错误")
+//		return
+//	}
+//
+//	// 使用 JWT
+//
+//	if err = u.SetLoginToken(ctx, user.Id); err != nil {
+//		ctx.String(http.StatusOK, "系统错误")
+//		return
+//	}
+//
+//	ctx.String(http.StatusOK, "登录成功")
+//	return
+//}
 
 func (u *UserHandler) Login(ctx *gin.Context) {
 	type LoginReq struct {
