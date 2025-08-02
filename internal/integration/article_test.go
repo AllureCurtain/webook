@@ -14,7 +14,7 @@ import (
 	"webook/internal/domain"
 	"webook/internal/integration/startup"
 	"webook/internal/repository/dao/article"
-	ijwt "webook/internal/web/jwt"
+	"webook/pkg/ginx"
 )
 
 // ArticleTestSuite 测试套件
@@ -28,8 +28,8 @@ func (s *ArticleTestSuite) SetupSuite() {
 	// 在所有测试执行之前，初始化一些内容
 	s.server = gin.Default()
 	s.server.Use(func(ctx *gin.Context) {
-		ctx.Set("claims", &ijwt.UserClaims{
-			Uid: 123,
+		ctx.Set("claims", &ginx.UserClaims{
+			Id: 123,
 		})
 	})
 	s.db = startup.InitTestDB()

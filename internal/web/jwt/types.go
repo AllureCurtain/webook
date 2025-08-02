@@ -19,10 +19,10 @@ type RefreshClaims struct {
 	jwt.RegisteredClaims
 }
 
-type UserClaims struct {
-	jwt.RegisteredClaims
-	// 声明自己的要放到 token 里面的数据
-	Uid       int64
-	Ssid      string
-	UserAgent string
-}
+//type UserClaims struct {
+//	jwt.RegisteredClaims
+//	// 声明自己的要放到 token 里面的数据
+//	Uid       int64
+//	Ssid      string
+//	UserAgent string
+//}

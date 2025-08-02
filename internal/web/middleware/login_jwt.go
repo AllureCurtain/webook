@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 	ijwt "webook/internal/web/jwt"
+	"webook/pkg/ginx"
 )
 
 type LoginJWTMiddleWareBuilder struct {
@@ -39,7 +40,7 @@ func (l *LoginJWTMiddleWareBuilder) Build() gin.HandlerFunc {
 		tokenStr := l.ExtractToken(ctx)
 
 		// ParseWithClaims 中，一定要加入指针
-		claims := &ijwt.UserClaims{}
+		claims := &ginx.UserClaims{}
 		token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
 			return []byte("moyn8y9abnd7q4zkq2m73yw8tu9j5ixm"), nil
 		})
@@ -49,7 +50,7 @@ func (l *LoginJWTMiddleWareBuilder) Build() gin.HandlerFunc {
 			return
 		}
 		// err 为 nil，token 不为 nil
-		if token == nil || !token.Valid || claims.Uid == 0 {
+		if token == nil || !token.Valid || claims.Id == 0 {
 			// 没登录
 			ctx.AbortWithStatus(http.StatusUnauthorized)
 			return

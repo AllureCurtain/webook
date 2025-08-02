@@ -455,9 +455,9 @@ func (c *UserHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
-	uc := ctx.MustGet("user").(*ijwt.UserClaims)
+	uc := ctx.MustGet("user").(*ginx.UserClaims)
 	err = c.svc.UpdateNonSensitiveInfo(ctx, domain.User{
-		Id:       uc.Uid,
+		Id:       uc.Id,
 		Nickname: req.Nickname,
 		Birthday: birthday,
 		AboutMe:  req.AboutMe,
@@ -477,8 +477,8 @@ func (c *UserHandler) ProfileJWT(ctx *gin.Context) {
 		Birthday string
 		AboutMe  string
 	}
-	uc := ctx.MustGet("user").(*ijwt.UserClaims)
-	u, err := c.svc.Profile(ctx, uc.Uid)
+	uc := ctx.MustGet("user").(*ginx.UserClaims)
+	u, err := c.svc.Profile(ctx, uc.Id)
 	if err != nil {
 		ctx.String(http.StatusOK, "系统错误")
 		return

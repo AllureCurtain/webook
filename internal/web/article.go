@@ -7,7 +7,7 @@ import (
 	"time"
 	"webook/internal/domain"
 	"webook/internal/service"
-	ijwt "webook/internal/web/jwt"
+	//ijwt "webook/internal/web/jwt"
 	"webook/pkg/ginx"
 	"webook/pkg/logger"
 )
@@ -42,7 +42,7 @@ func (h *ArticleHandler) Edit(ctx *gin.Context) {
 	}
 
 	c := ctx.MustGet("claims")
-	claims, ok := c.(*ijwt.UserClaims)
+	claims, ok := c.(*ginx.UserClaims)
 	if !ok {
 		ctx.JSON(http.StatusOK, Result{
 			Code: 5,
@@ -59,7 +59,7 @@ func (h *ArticleHandler) Edit(ctx *gin.Context) {
 		Title:   req.Title,
 		Content: req.Content,
 		Author: domain.Author{
-			Id: claims.Uid,
+			Id: claims.Id,
 		},
 	})
 	if err != nil {
@@ -83,7 +83,7 @@ func (h *ArticleHandler) Publish(ctx *gin.Context) {
 		return
 	}
 	c := ctx.MustGet("claims")
-	claims, ok := c.(*ijwt.UserClaims)
+	claims, ok := c.(*ginx.UserClaims)
 	if !ok {
 		ctx.JSON(http.StatusOK, Result{
 			Code: 5,
@@ -94,7 +94,7 @@ func (h *ArticleHandler) Publish(ctx *gin.Context) {
 	}
 	// 检测输入，跳过这一步
 	// 调用 svc 的代码
-	id, err := h.svc.Publish(ctx, req.toDomain(claims.Uid))
+	id, err := h.svc.Publish(ctx, req.toDomain(claims.Id))
 	if err != nil {
 		ctx.JSON(http.StatusOK, Result{
 			Code: 5,
@@ -119,7 +119,7 @@ func (h *ArticleHandler) Withdraw(ctx *gin.Context) {
 		return
 	}
 	c := ctx.MustGet("claims")
-	claims, ok := c.(*ijwt.UserClaims)
+	claims, ok := c.(*ginx.UserClaims)
 	if !ok {
 		ctx.JSON(http.StatusOK, Result{
 			Code: 5,
@@ -130,7 +130,7 @@ func (h *ArticleHandler) Withdraw(ctx *gin.Context) {
 	}
 	// 检测输入，跳过这一步
 	// 调用 svc 的代码
-	err := h.svc.Withdraw(ctx, claims.Uid, req.Id)
+	err := h.svc.Withdraw(ctx, claims.Id, req.Id)
 	if err != nil {
 		ctx.JSON(http.StatusOK, Result{
 			Code: 5,
@@ -151,7 +151,7 @@ type ListReq struct {
 	Limit  int `json:"limit"`
 }
 
-func (a *ArticleHandler) List(ctx *gin.Context, req ListReq, uc ijwt.UserClaims) (ginx.Result, error) {
+func (a *ArticleHandler) List(ctx *gin.Context, req ListReq, uc ginx.UserClaims) (ginx.Result, error) {
 
 	// 对于批量接口来说，要小心批次大小
 	//if req.Limit > 100 {
@@ -166,7 +166,7 @@ func (a *ArticleHandler) List(ctx *gin.Context, req ListReq, uc ijwt.UserClaims)
 	//	}, nil
 	//}
 
-	res, err := a.svc.List(ctx, uc.Uid, req.Offset, req.Limit)
+	res, err := a.svc.List(ctx, uc.Id, req.Offset, req.Limit)
 	if err != nil {
 		a.l.Error("获得用户会话信息失败")
 		return ginx.Result{
