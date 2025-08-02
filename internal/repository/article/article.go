@@ -2,7 +2,9 @@ package article
 
 import (
 	"context"
+	"github.com/ecodeclub/ekit/slice"
 	"gorm.io/gorm"
+	"time"
 	"webook/internal/domain"
 	dao "webook/internal/repository/dao/article"
 	"webook/pkg/logger"
@@ -15,6 +17,7 @@ type ArticleRepository interface {
 	//FindById(ctx context.Context, id int64) domain.Article
 	// SyncStatus 仅仅同步状态
 	SyncStatus(ctx context.Context, uid, id int64, status domain.ArticleStatus) error
+	List(ctx context.Context, uid int64, offset int, limit int) ([]domain.Article, error)
 }
 
 type CachedArticleRepository struct {
@@ -139,6 +142,16 @@ func (repo *CachedArticleRepository) SyncStatus(ctx context.Context, uid, id int
 	return repo.dao.SyncStatus(ctx, uid, id, status.ToUint8())
 }
 
+func (c *CachedArticleRepository) List(ctx context.Context, uid int64, offset int, limit int) ([]domain.Article, error) {
+	res, err := c.dao.GetByAuthor(ctx, uid, offset, limit)
+	if err != nil {
+		return nil, err
+	}
+	return slice.Map[dao.Article, domain.Article](res, func(idx int, src dao.Article) domain.Article {
+		return c.ToDomain(src)
+	}), nil
+}
+
 func (repo *CachedArticleRepository) ToDomain(art dao.Article) domain.Article {
 	return domain.Article{
 		Id:      art.Id,
@@ -148,6 +161,8 @@ func (repo *CachedArticleRepository) ToDomain(art dao.Article) domain.Article {
 		Author: domain.Author{
 			Id: art.AuthorId,
 		},
+		Ctime: time.UnixMilli(art.Ctime),
+		Utime: time.UnixMilli(art.Utime),
 	}
 }
 

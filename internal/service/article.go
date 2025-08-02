@@ -12,6 +12,7 @@ type ArticleService interface {
 	Publish(ctx context.Context, art domain.Article) (int64, error)
 	Withdraw(ctx context.Context, uid, id int64) error
 	PublishV1(ctx context.Context, art domain.Article) (int64, error)
+	List(ctx context.Context, uid int64, offset int, limit int) ([]domain.Article, error)
 }
 
 type articleService struct {
@@ -95,4 +96,8 @@ func (svc *articleService) PublishV1(ctx context.Context, art domain.Article) (i
 
 func (svc *articleService) Withdraw(ctx context.Context, uid, id int64) error {
 	return svc.repo.SyncStatus(ctx, uid, id, domain.ArticleStatusPrivate)
+}
+
+func (a *articleService) List(ctx context.Context, uid int64, offset int, limit int) ([]domain.Article, error) {
+	return a.repo.List(ctx, uid, offset, limit)
 }
