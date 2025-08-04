@@ -1,8 +1,10 @@
 package web
 
 import (
+	"fmt"
 	"github.com/ecodeclub/ekit/slice"
 	"github.com/gin-gonic/gin"
+	"golang.org/x/sync/errgroup"
 	"net/http"
 	"strconv"
 	"time"
@@ -16,14 +18,18 @@ import (
 var _ handler = (*ArticleHandler)(nil)
 
 type ArticleHandler struct {
-	svc service.ArticleService
-	l   logger.LoggerV1
+	svc     service.ArticleService
+	l       logger.LoggerV1
+	intrSvc service.InteractiveService
+	reward  service.RewardService
+	biz     string
 }
 
 func NewArticleHandler(svc service.ArticleService, l logger.LoggerV1) *ArticleHandler {
 	return &ArticleHandler{
 		svc: svc,
 		l:   l,
+		biz: "article",
 	}
 }
 
@@ -35,6 +41,14 @@ func (h *ArticleHandler) RegisterRoutes(server *gin.Engine) {
 
 	g.POST("/list", ginx.WrapClaimsAndReq(h.List))
 	g.GET("/detail/:id", h.Detail)
+
+	pub := g.Group("/pub")
+	//pub.GET("/pub", a.PubList)
+	pub.GET("/:id", ginx.WrapClaims(h.PubDetail))
+	pub.POST("/like", ginx.WrapClaimsAndReq[LikeReq](h.Like))
+	pub.POST("/collect", ginx.WrapClaimsAndReq[CollectReq](h.Collect))
+	// 打赏
+	pub.POST("/reward", ginx.WrapClaimsAndReq[RewardReq](h.Reward))
 }
 
 func (h *ArticleHandler) Edit(ctx *gin.Context) {
@@ -250,6 +264,109 @@ func (a *ArticleHandler) Detail(ctx *gin.Context) {
 			Utime: art.Utime.Format(time.DateTime),
 		},
 	})
+}
+
+func (a *ArticleHandler) PubDetail(ctx *gin.Context, uc ginx.UserClaims) (Result, error) {
+	idstr := ctx.Param("id")
+	id, err := strconv.ParseInt(idstr, 10, 64)
+	if err != nil {
+		a.l.Error("前端输入的 ID 不对", logger.Error(err))
+		return Result{
+			Code: 4,
+			Msg:  "参数错误",
+		}, fmt.Errorf("查询文章详情的 ID %s 不正确, %w", idstr, err)
+	}
+
+	art, err := a.svc.GetPublishedById(ctx, id)
+	if err != nil {
+		return Result{
+			Code: 5,
+			Msg:  "系统错误",
+		}, fmt.Errorf("获取文章信息失败 %w", err)
+	}
+
+	// 直接异步操作，在确定我们获取到了数据之后再来操作
+	//go func() {
+	//	err = a.intrSvc.IncrReadCnt(ctx, a.biz, art.Id)
+	//	if err != nil {
+	//		a.l.Error("增加文章阅读数失败", logger.Error(err))
+	//	}
+	//}()
+	return Result{
+		Data: ArticleVo{
+			Id:      art.Id,
+			Title:   art.Title,
+			Status:  art.Status.ToUint8(),
+			Content: art.Content,
+			// 要把作者信息带出去
+			Author: art.Author.Name,
+			Ctime:  art.Ctime.Format(time.DateTime),
+			Utime:  art.Utime.Format(time.DateTime),
+			//ReadCnt:    intr.ReadCnt,
+			//CollectCnt: intr.CollectCnt,
+			//LikeCnt:    intr.LikeCnt,
+			//Liked:      intr.Liked,
+			//Collected:  intr.Collected,
+		},
+	}, nil
+}
+
+func (a *ArticleHandler) Like(ctx *gin.Context, req LikeReq, uc ginx.UserClaims) (ginx.Result, error) {
+	var err error
+	if req.Like {
+		err = a.intrSvc.Like(ctx, a.biz, req.Id, uc.Id)
+	} else {
+		err = a.intrSvc.CancelLike(ctx, a.biz, req.Id, uc.Id)
+	}
+
+	if err != nil {
+		return Result{
+			Code: 5,
+			Msg:  "系统错误",
+		}, err
+	}
+	return Result{Msg: "OK"}, nil
+}
+
+func (a *ArticleHandler) Collect(ctx *gin.Context, req CollectReq, uc ginx.UserClaims) (Result, error) {
+	err := a.intrSvc.Collect(ctx, a.biz, req.Id, uc.Id, req.Cid)
+	if err != nil {
+		return Result{
+			Code: 5,
+			Msg:  "系统错误",
+		}, err
+	}
+	return Result{Msg: "OK"}, nil
+}
+
+func (a *ArticleHandler) Reward(ctx *gin.Context, req RewardReq, uc ginx.UserClaims) (ginx.Result, error) {
+	art, err := a.svc.GetPublishedById(ctx.Request.Context(), req.Id)
+	if err != nil {
+		return ginx.Result{
+			Code: 5,
+			Msg:  "系统错误",
+		}, err
+	}
+	resp, err := a.reward.PreReward(ctx.Request.Context(), &rewardv1.PreRewardRequest{
+		Biz:       "article",
+		BizId:     art.Id,
+		BizName:   art.Title,
+		TargetUid: art.Author.GetId(),
+		Uid:       uc.Id,
+		Amt:       req.Amt,
+	})
+	if err != nil {
+		return ginx.Result{
+			Code: 5,
+			Msg:  "系统错误",
+		}, err
+	}
+	return ginx.Result{
+		Data: map[string]any{
+			"codeURL": resp.CodeUrl,
+			"rid":     resp.Rid,
+		},
+	}, nil
 }
 
 func (req ArticleReq) toDomain(uid int64) domain.Article {

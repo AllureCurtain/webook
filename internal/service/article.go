@@ -22,7 +22,7 @@ type ArticleService interface {
 	// GetPublishedById 查找已经发表的
 	// 正常来说在微服务架构下，读者服务和创作者服务会是两个独立的服务
 	// 单体应用下可以混在一起，毕竟现在也没几个方法
-	GetPublishedById(ctx context.Context, id, uid int64) (domain.Article, error)
+	GetPublishedById(ctx context.Context, id int64) (domain.Article, error)
 	// ListPub 根据更新时间来分页，更新时间必须小于 startTime
 	ListPub(ctx context.Context, startTime time.Time, offset, limit int) ([]domain.Article, error)
 }
@@ -119,7 +119,7 @@ func (svc *articleService) GetById(ctx context.Context, id int64) (domain.Articl
 	return svc.repo.GetById(ctx, id)
 }
 
-func (svc *articleService) GetPublishedById(ctx context.Context, id, uid int64) (domain.Article, error) {
+func (svc *articleService) GetPublishedById(ctx context.Context, id int64) (domain.Article, error) {
 	var eg errgroup.Group
 	var art *domain.Article
 	var author *domain.Author
