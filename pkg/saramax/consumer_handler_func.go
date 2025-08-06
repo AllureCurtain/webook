@@ -28,8 +28,7 @@ func (h *Handler[T]) Cleanup(session sarama.ConsumerGroupSession) error {
 }
 
 // ConsumeClaim 可以考虑在这个封装里面提供统一的重试机制
-func (h *Handler[T]) ConsumeClaim(session sarama.ConsumerGroupSession,
-	claim sarama.ConsumerGroupClaim) error {
+func (h *Handler[T]) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	msgs := claim.Messages()
 	for msg := range msgs {
 		var t T
