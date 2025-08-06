@@ -277,17 +277,17 @@ func (a *ArticleHandler) PubDetail(ctx *gin.Context, ucc ginx.UserClaims) (Resul
 		}, fmt.Errorf("查询文章详情的 ID %s 不正确, %w", idstr, err)
 	}
 
+	uc := ctx.MustGet("claims").(*ginx.UserClaims)
 	var eg errgroup.Group
 	var art domain.Article
 	eg.Go(func() error {
-		art, err = a.svc.GetPublishedById(ctx, id)
+		art, err = a.svc.GetPublishedById(ctx, id, uc.Id)
 		return err
 	})
 
 	var intr domain.Interactive
 	// 获得这篇文章的计数
 	eg.Go(func() error {
-		uc := ctx.MustGet("users").(ginx.UserClaims)
 		intr, err = a.intrSvc.Get(ctx, a.biz, id, uc.Id)
 		return err
 	})

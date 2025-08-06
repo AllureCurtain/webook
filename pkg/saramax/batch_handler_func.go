@@ -30,8 +30,7 @@ func (h *BatchHandler[T]) Cleanup(session sarama.ConsumerGroupSession) error {
 }
 
 // ConsumeClaim 可以考虑在这个封装里面提供统一的重试机制
-func (h *BatchHandler[T]) ConsumeClaim(session sarama.ConsumerGroupSession,
-	claim sarama.ConsumerGroupClaim) error {
+func (h *BatchHandler[T]) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	msgsCh := claim.Messages()
 	// 这个可以做成参数
 	const batchSize = 10
